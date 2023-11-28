@@ -20,7 +20,7 @@ export const GET = async (request: NextRequest) => {
     const repo = searchParams.get("repo");
 
     // Fetch contributors from GitHub API using fetch.
-    const contributors = (await (await fetch(`${GITHUB_API_URL}/${repo}/contributors?per_page=100`)).json()) as Contributor[];
+    const contributors = (await (await fetch(`${GITHUB_API_URL}/${repo}/contributors?per_page=96`)).json()) as Contributor[];
     const avatarUrls = contributors.map((contributor) => contributor.avatar_url);
 
     // Fetch contributor avatars and build an array of image buffers.
@@ -39,10 +39,12 @@ export const GET = async (request: NextRequest) => {
       })
     );
 
+    const rowCount = 12;
     const imageSize = 64;
     const collagePadding = 8;
-    const collageWidth = imageSize * 10 + collagePadding * (10 + 1);
-    const collageHeight = Math.floor(contributors.length / 10) * imageSize + collagePadding * (Math.floor(contributors.length / 10) + 1);
+    const collageWidth = imageSize * rowCount + collagePadding * (rowCount + 1);
+    const collageHeight =
+      Math.floor(contributors.length / rowCount) * imageSize + collagePadding * (Math.floor(contributors.length / rowCount) + 1);
 
     // Create a blank Jimp image for the collage.
     const collage = new Jimp(collageWidth, collageHeight, 0x00000000, (err, image) => {
@@ -51,13 +53,11 @@ export const GET = async (request: NextRequest) => {
 
     // Paste each avatar onto the collage.
     avatarImages.forEach((avatar, index) => {
-      const x = (index % Math.sqrt(avatarImages.length)) * imageSize;
-      const y = Math.floor(index / Math.sqrt(avatarImages.length)) * imageSize;
-      collage.composite(
-        avatar,
-        x + collagePadding * ((index % Math.sqrt(avatarImages.length)) + 1),
-        y + collagePadding * (Math.floor(index / Math.sqrt(avatarImages.length)) + 1)
-      );
+      const rowIndex = Math.floor(index / rowCount);
+      const columnIndex = index % rowCount;
+      const x = columnIndex * imageSize + collagePadding * (columnIndex + 1);
+      const y = rowIndex * imageSize + collagePadding * (rowIndex + 1);
+      collage.composite(avatar, x, y);
     });
 
     // Convert the Jimp image to a buffer.
