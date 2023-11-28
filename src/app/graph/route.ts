@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import fetch from "node-fetch";
+import Jimp from "jimp";
 
 interface Contributor {
   login: string;
@@ -21,13 +23,50 @@ export const GET = async (request: NextRequest) => {
     const contributors = (await (await fetch(`${GITHUB_API_URL}/${repo}/contributors?per_page=96`)).json()) as Contributor[];
     const avatarUrls = contributors.map((contributor) => contributor.avatar_url);
 
-    // Generate SVG markup with rounded avatars.
-    const svgMarkup = generateSVG(avatarUrls);
+    // Fetch contributor avatars and build an array of image buffers.
+    const avatarBuffers = await Promise.all(
+      avatarUrls.map(async (avatarUrl) => {
+        const avatarResponse = await fetch(avatarUrl + "&s=64");
+        return avatarResponse.buffer();
+      })
+    );
 
-    return new Response(svgMarkup, {
+    // Create a Jimp image for each avatar.
+    const avatarImages = await Promise.all(
+      avatarBuffers.map(async (buffer) => {
+        const image = await Jimp.read(buffer);
+        return image.resize(64, 64).circle();
+      })
+    );
+
+    const rowCount = 12;
+    const imageSize = 64;
+    const collagePadding = 8;
+    const collageWidth = imageSize * rowCount + collagePadding * (rowCount + 1);
+    const collageHeight =
+      Math.floor(contributors.length / rowCount) * imageSize + collagePadding * (Math.floor(contributors.length / rowCount) + 1);
+
+    // Create a blank Jimp image for the collage.
+    const collage = new Jimp(collageWidth, collageHeight, 0x00000000, (err, image) => {
+      if (err) throw err;
+    });
+
+    // Paste each avatar onto the collage.
+    avatarImages.forEach((avatar, index) => {
+      const rowIndex = Math.floor(index / rowCount);
+      const columnIndex = index % rowCount;
+      const x = columnIndex * imageSize + collagePadding * (columnIndex + 1);
+      const y = rowIndex * imageSize + collagePadding * (rowIndex + 1);
+      collage.composite(avatar, x, y);
+    });
+
+    // Convert the Jimp image to a buffer.
+    const collageBuffer = await collage.getBufferAsync(Jimp.MIME_PNG);
+
+    return new Response(collageBuffer, {
       status: 200,
       headers: {
-        "Content-Type": "image/svg+xml",
+        "Content-Type": "image/png",
       },
     });
   } catch (error) {
@@ -37,37 +76,3 @@ export const GET = async (request: NextRequest) => {
     });
   }
 };
-
-// Function to generate SVG markup with rounded avatars.
-function generateSVG(avatarUrls: string[]): string {
-  const rowCount = 12;
-  const collagePadding = 8;
-  const imageSize = 64;
-  const svgWidth = imageSize * rowCount + collagePadding * (rowCount + 1);
-  const svgHeight = Math.floor(avatarUrls.length / rowCount) * imageSize + collagePadding * (Math.floor(avatarUrls.length / rowCount) + 1);
-
-  const svgHeader = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">`;
-  let svgBody = "";
-
-  avatarUrls.forEach((url, index) => {
-    const rowIndex = Math.floor(index / rowCount);
-    const columnIndex = index % rowCount;
-    const x = columnIndex * imageSize + collagePadding * (columnIndex + 1);
-    const y = rowIndex * imageSize + collagePadding * (rowIndex + 1);
-
-    // Add a unique clipPath for each avatar with rounded corners.
-    const clipPathId = `rounded-clip-path-${index}`;
-    svgBody += `<defs><clipPath id="${clipPathId}"><circle cx="${x + imageSize / 2}" cy="${y + imageSize / 2}" r="${
-      imageSize / 2
-    }"/></clipPath></defs>`;
-
-    // Add an image element for each avatar with rounded corners.
-    svgBody += `<image x="${x}" y="${y}" width="${imageSize}" height="${imageSize}" href="${
-      url + ";s=64"
-    }" clip-path="url(#${clipPathId})" />`;
-  });
-
-  const svgFooter = "</svg>";
-
-  return svgHeader + svgBody + svgFooter;
-}
