@@ -21,7 +21,7 @@ export const GET = async (request: NextRequest) => {
   try {
     const searchParams = request.nextUrl.searchParams;
     const repo = searchParams.get("repo");
-    const format = searchParams.get("format");
+    const format = searchParams.get("format") || "svg";
 
     // Fetch contributors from GitHub API using fetch.
     const contributors = (await (await fetch(`${GITHUB_API_URL}/${repo}/contributors?per_page=96`)).json()) as Contributor[];
