@@ -1,6 +1,6 @@
+import Jimp from "jimp";
 import { NextRequest } from "next/server";
 import fetch from "node-fetch";
-import Jimp from "jimp";
 
 interface Contributor {
   login: string;
@@ -52,7 +52,7 @@ export const GET = async (request: NextRequest) => {
         const arrayBuffer = await avatarResponse.arrayBuffer();
         avatarCache.set(avatarUrl, arrayBuffer);
         return arrayBuffer;
-      })
+      }),
     );
 
     if (format === "svg") {
@@ -72,7 +72,7 @@ export const GET = async (request: NextRequest) => {
       avatarBuffers.map(async (arrayBuffer) => {
         const image = await Jimp.read(Buffer.from(arrayBuffer));
         return image.resize(64, 64).circle();
-      })
+      }),
     );
 
     const graphWidth = AVATAR_SIZE * ROW_COUNT + IMAGE_PADDING * (ROW_COUNT + 1);
@@ -80,7 +80,7 @@ export const GET = async (request: NextRequest) => {
       Math.floor(contributors.length / ROW_COUNT) * AVATAR_SIZE + IMAGE_PADDING * (Math.floor(contributors.length / ROW_COUNT) + 1);
 
     // Create a blank Jimp image for the graph.
-    const graph = new Jimp(graphWidth, graphHeight, 0x00000000, (err, image) => {
+    const graph = new Jimp(graphWidth, graphHeight, 0x00000000, (err) => {
       if (err) throw err;
     });
 
